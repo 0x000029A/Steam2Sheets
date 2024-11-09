@@ -1,6 +1,6 @@
 # Steam2Sheets
 Add your favorite games on Steam to a Google Sheets.
-Using Google Apps Script, its Web App deployment, and any userscript manager.
+Using Google Apps Script, its Web App deployment, IGDB API, and any userscript manager.
 
 ## How to use?
 1. Install a userscript manager.
