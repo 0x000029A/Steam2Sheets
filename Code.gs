@@ -1,11 +1,12 @@
-function getGameDetails(id, accessToken) {
+// v24.11.12
+function getGameDetails(id) {
   const body = `fields name, platforms.name, involved_companies.company.name, first_release_date, franchises.name, collections.name, version_title, cover.url, total_rating_count, total_rating, category, game_modes.name, genres.name, keywords.name, player_perspectives.name, themes.name; where id = ${id};`;
 
   const options = {
     method: 'POST',
     headers: {
-      'Client-ID': 'CLIENT_ID',
-      'Authorization': 'Bearer ' + accessToken,
+      'Client-ID': 'Client-ID',
+      'Authorization': 'Bearer access_token',
       'Accept': 'application/json',
       'Content-Type': 'text/plain'
     },
@@ -15,8 +16,8 @@ function getGameDetails(id, accessToken) {
   return JSON.parse(UrlFetchApp.fetch('https://api.igdb.com/v4/games', options).getContentText())[0];
 }
 
-function addGame(id, row, sheet, accessToken) {
-  const details = getGameDetails(id, accessToken);
+function addGame(id, row, sheet) {
+  const details = getGameDetails(id);
   if (!details) return;
 
   const columns = {
@@ -98,23 +99,23 @@ function addGame(id, row, sheet, accessToken) {
 }
 
 function doPost(e) {
-  const sheet = SpreadsheetApp.getActive().getSheetByName('SHEET_NAME');
+  const sheet = SpreadsheetApp.getActive().getSheetByName('Master');
   Logger.log(e.parameter);
 
   const gameName = e.parameter.gameName;
-  const gameID = e.parameter.gameID;
+  const IGDBID = e.parameter.IGDBID;
   const accessToken = e.parameter.accessToken;
 
-  if (gameName && gameID) {
-    if (sheet.getRange('R2:R').createTextFinder(gameID).findNext() || sheet.getRange('B2:B').createTextFinder(gameName).findNext())
+  if (gameName && IGDBID) {
+    if (sheet.getRange('R2:R').createTextFinder(IGDBID).findNext() || sheet.getRange('B2:B').createTextFinder(gameName).findNext())
       return ContentService.createTextOutput("exist");
     else
       return ContentService.createTextOutput("no exist");
   }
-  else if (accessToken && gameID) {
+  else if (accessToken && IGDBID) {
     lastEmptyRow_B = sheet.getLastRow() + 1;
-    addGame(gameID, lastEmptyRow_B, sheet, accessToken);
-    if (sheet.getRange("R" + lastEmptyRow_B).getValue() == gameID)
+    addGame(IGDBID, lastEmptyRow_B, sheet, accessToken);
+    if (sheet.getRange("R" + lastEmptyRow_B).getValue() == IGDBID)
       return ContentService.createTextOutput("Success");
   }
   else
