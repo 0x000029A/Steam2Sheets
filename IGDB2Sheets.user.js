@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IGDB2Sheets
 // @namespace    http://tampermonkey.net/
-// @version      24.11.12
+// @version      24.11.13
 // @description  Add IGDB games to Google Sheets.
 // @author       mHashem
 // @match        https://www.igdb.com/games/*
@@ -14,18 +14,15 @@
 (async function() {
     'use strict';
 
-    const gameName_elm = await observeDOM("div.sc-eIPYkq.ioJrei.MuiGrid2-root.MuiGrid2-direction-xs-row.sc-hBgdUx.jLxKaX.sc-gopctv.jyBCHy > div.sc-eIPYkq.kyMHnR.MuiGrid2-root.MuiGrid2-container.MuiGrid2-direction-xs-row.MuiGrid2-grid-xs-12.sc-hBgdUx.jLxKaX.sc-hsnvOV > div > div > div.sc-eIPYkq.bgMPRK.MuiGrid2-root.MuiGrid2-container.MuiGrid2-direction-xs-row.MuiGrid2-grid-xs-12.sc-hBgdUx.jLxKaX > div > h1");
-    const gameName = gameName_elm.innerText;
-
     const IGDBID_elm = await observeDOM("div.sc-eIPYkq.ioJrei.MuiGrid2-root.MuiGrid2-direction-xs-row.sc-hBgdUx.jLxKaX.sc-kxJlZZ.hytsjV > div > div.sc-eIPYkq.jILOUz.MuiGrid2-root.MuiGrid2-direction-xs-row.MuiGrid2-grid-xs-12.MuiGrid2-grid-md-3.sc-hBgdUx.jLxKaX > div > div:nth-child(1) > div > p");
     const IGDBID = IGDBID_elm.innerText.match(/IGDB ID: (.*)/)[1];
 
-    if (IGDBID && gameName) {
+    if (IGDBID) {
         var addGameBtnDiv = createAddGameBtnDiv();
         const parentDiv = await observeDOM("div.sc-eIPYkq.ioJrei.MuiGrid2-root.MuiGrid2-direction-xs-row.sc-hBgdUx.jLxKaX.sc-gopctv.jyBCHy > div.sc-eIPYkq.kyMHnR.MuiGrid2-root.MuiGrid2-container.MuiGrid2-direction-xs-row.MuiGrid2-grid-xs-12.sc-hBgdUx.jLxKaX.sc-hsnvOV > div > div > div.sc-eIPYkq.hWuoFC.MuiGrid2-root.MuiGrid2-container.MuiGrid2-direction-xs-row.MuiGrid2-grid-xs-12.sc-hBgdUx.jLxKaX > div.sc-eIPYkq.bPysV.MuiGrid2-root.MuiGrid2-direction-xs-row.MuiGrid2-grid-xs-12.MuiGrid2-grid-sm-6.MuiGrid2-grid-md-3.sc-hBgdUx.jLxKaX.sc-jNksTS.sc-jKsysk.kBHwDp.hwizCH");
         parentDiv.appendChild(addGameBtnDiv);
-        if (await googleApps(true)) return;
-        addGameBtnDiv.addEventListener('mousedown', () => googleApps(false), {once: true});
+        if (await googleApps(1)) return;
+        addGameBtnDiv.addEventListener('mousedown', () => googleApps(0), {once: true});
     }
     ////////////////////////
     function createAddGameBtnDiv() {
@@ -80,32 +77,26 @@
         });
     }
     function googleApps(checkOnly) {
-        let data;
-        if (checkOnly) data = `IGDBID=${encodeURIComponent(IGDBID)}&gameName=${encodeURIComponent(gameName)}`;
-        else if (!checkOnly) data = `IGDBID=${encodeURIComponent(IGDBID)}&accessToken=${encodeURIComponent("accessToken")}`
-
         return new Promise((resolve, reject) => {
             GM.xmlHttpRequest({
                 method: 'POST',
                 url: 'webapp_url',
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                data: data,
+                data: `check=${checkOnly}&id=${IGDBID}&src=0`,
                 onload: function(response) {
                     if (response.responseText === "exist") {
                         addGameBtnDiv.querySelector("span").innerHTML = "check_box";
                         addGameBtnDiv.querySelector("p").style.background = "#4882a6";
                         addGameBtnDiv.style.cursor = "not-allowed";
-                        console.log("Game already exist");
                         resolve(true);
                     } else if (response.responseText === "Success"){
                         addGameBtnDiv.querySelector("span").innerHTML = "check_box";
                         addGameBtnDiv.querySelector("p").style.background = "#4882a6";
                         addGameBtnDiv.style.cursor = "not-allowed";
                         addGameBtnDiv.removeEventListener('mousedown', googleApps);
-                        console.log("Game added successfully!");
                     }
                     else if (response.responseText === "no exist") {
-                        console.log("game doens't exist");
+                        addGameBtnDiv.querySelector("p").style.background = "#58249c";
                         resolve(false);
                     }
                     else {

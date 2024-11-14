@@ -8,7 +8,8 @@ Using Google Apps Script, its Web App deployment, IGDB API, and any userscript m
 3. Create a sheet on Google Sheets.
 4. Add Apps Script to it.
 5. Copy Code.gs to your Code.gs
-6. Edit `oauthScopes` in appsscript.json to the following:
+6. Get your access token using getAccessToken.gs
+7. Edit `oauthScopes` in appsscript.json to the following:
 ```
  "oauthScopes": [
     "https://www.googleapis.com/auth/script.external_request",

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Steam2Sheets
 // @namespace    http://tampermonkey.net/
-// @version      24.11.12
+// @version      24.11.13
 // @description  Add Steam games to Google Sheets.
 // @author       mHashem
 // @match        https://store.steampowered.com/app/*
@@ -14,17 +14,14 @@
 (async function() {
     'use strict';
 
-    const gameName = document.querySelector("#appHubAppName").innerText;
     const steamID = window.location.href.match(/\/app\/(\d+)\//)[1];
 
-    const IGDBID = await getIGDBID();
-
-    if (IGDBID) {
+    if (steamID) {
         var addGameBtnDiv = createAddGameBtnDiv();
         const parentDiv = await observeDOM('#queueActionsCtn');
         parentDiv.insertBefore(addGameBtnDiv, parentDiv.querySelector('div:nth-child(7)'));
-        if (await googleApps(true)) return;
-        else addGameBtnDiv.addEventListener('mousedown', () => googleApps(false), {once: true});
+        if (await googleApps(1)) return;
+        else addGameBtnDiv.addEventListener('mousedown', () => googleApps(0), {once: true});
     }
     ///////////////////////
     function createAddGameBtnDiv() {
@@ -63,33 +60,6 @@
 
         return addGameBtnDiv__;
     }
-    async function getIGDBID() {
-        return new Promise((resolve, reject) => {
-            GM.xmlHttpRequest({
-                method: 'POST',
-                url: 'https://api.igdb.com/v4/external_games',
-                headers: {
-                    'Client-ID': 'client_id',
-                    'Authorization': `Bearer access_token`,
-                    'Accept': 'application/json',
-                    'Content-Type': 'text/plain'
-                },
-                data: `fields game; where uid = "${steamID}" & category = 1;`,
-                onload: function(response) {
-                    if (response.status === 200) {
-                        resolve(JSON.parse(response.responseText)[0].game);
-                    } else {
-                        console.error('[Steam2Sheets] Failed to get game details:', response.status, response.responseText);
-                        reject(response.status);
-                    }
-                },
-                onerror: function(error) {
-                    console.error('[Steam2Sheets] Error getting game details:', error);
-                    reject(error);
-                }
-            });
-        });
-    }
     async function observeDOM(selector) {
         return new Promise((resolve) => {
             const targetNode = document.querySelector(selector);
@@ -108,36 +78,34 @@
         });
     }
     function googleApps(checkOnly) {
-        let data;
-        if (checkOnly) data = `IGDBID=${encodeURIComponent(IGDBID)}&gameName=${encodeURIComponent(gameName)}`;
-        else if (!checkOnly) data = `IGDBID=${encodeURIComponent(IGDBID)}&accessToken=${encodeURIComponent("access_token")}`
-
+        console.log("Check only sent" + checkOnly);
         return new Promise((resolve, reject) => {
             GM.xmlHttpRequest({
                 method: 'POST',
                 url: 'webapp_url',
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                data: data,
+                data: `check=${checkOnly}&id=${steamID}&src=1`,
                 onload: function(response) {
                     if (response.responseText === "exist") {
                         addGameBtnDiv.querySelector("span").innerHTML = "check_box";
                         addGameBtnDiv.querySelector("p").style.background = "#4882a6";
                         addGameBtnDiv.style.cursor = "not-allowed";
-                        console.log("Game already exist");
                         resolve(true);
                     } else if (response.responseText === "Success"){
                         addGameBtnDiv.querySelector("span").innerHTML = "check_box";
                         addGameBtnDiv.querySelector("p").style.background = "#4882a6";
                         addGameBtnDiv.style.cursor = "not-allowed";
                         addGameBtnDiv.removeEventListener('mousedown', googleApps);
-                        console.log("Game added successfully!");
                     }
                     else if (response.responseText === "no exist") {
-                        console.log("game doens't exist");
+                        addGameBtnDiv.querySelector("p").style.background = "#58249c";
                         resolve(false);
                     }
+                    else if (response.responseText === "Steam AppID is not in IGDB") {
+                        addGameBtnDiv.remove();
+                    }
                     else {
-                        console.log("Error adding game.");
+                        console.log(response.responseText);
                     }
                 },
                 onerror: function(error) {
