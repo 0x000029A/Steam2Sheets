@@ -1,7 +1,11 @@
-// v24.11.13
-function getGameDetails(id, checkOnly) {
-  if (checkOnly == 1) {
-    body = `fields name; where (external_games.uid = "${id}") | (id = ${id});`;
+// v25.03.13
+function getGameDetails(id, checkOnly, src) {
+
+  if (checkOnly == 1 && src == 1) {
+    body = `fields name; where external_games.uid = "${id}";`;
+  }//& external_games.external_game_source.name = "steam"
+  else if (checkOnly == 1 && src == 0) {
+    body = `fields name; where id = ${id};`;
   }
   else if (checkOnly == 0) {
     body = `fields name, platforms.name, involved_companies.company.name, first_release_date, franchises.name, collections.name, version_title, cover.url, total_rating_count, total_rating, category, game_modes.name, genres.name, keywords.name, player_perspectives.name, themes.name; where id = ${id};`;
@@ -10,31 +14,36 @@ function getGameDetails(id, checkOnly) {
   const options = {
     method: 'POST',
     headers: {
-      'Client-ID': 'Client-ID',
-      'Authorization': 'Bearer access_token',
-      'Accept': 'application/json',
-      'Content-Type': 'text/plain'
+      'Client-ID': 'CLIENT-ID',
+      'Authorization': 'Bearer TOKEN',
+      'Accept': 'application/json'
     },
     payload: body
   };
+
+  const url = 'https://api.igdb.com/v4/games';
   
-  return JSON.parse(UrlFetchApp.fetch('https://api.igdb.com/v4/games', options).getContentText())[0];
+  const response = UrlFetchApp.fetch(url, options).getContentText();
+  
+  const parsedResonse = JSON.parse(response)[0];
+  
+  return parsedResonse;
 }
 
 function addGame(id, row, sheet) {
-  const details = getGameDetails(id, 0);
+  const details = getGameDetails(id, 0, 0);
   if (!details) return;
 
   const columns = {
     cover: "A",
     name: "B",
-    platform: "C",
-    franchise: "E",
-    date: "F",
-    company: "P",
-    igdbID: "R",
-    erating: "T",
-    tags: "U"
+    platform: "D",
+    franchise: "F",
+    date: "G",
+    company: "Q",
+    igdbID: "S",
+    erating: "U",
+    tags: "C"
   };
 
   // TAGS
@@ -104,19 +113,35 @@ function addGame(id, row, sheet) {
 }
 
 function doPost(e) {
-  const sheet = SpreadsheetApp.getActive().getSheetByName('Sheet');
+  const sheet = SpreadsheetApp.getActive().getSheetByName('SHEETNAME');
 
+  const SECRET_KEY = "KEY";
+  if (!e.parameter.key || e.parameter.key !== SECRET_KEY) {
+    return ContentService.createTextOutput("Invalid key");
+  }
+
+  const user = Session.getActiveUser().getEmail();
+  if (user != "EMAIL") {
+    return ContentService.createTextOutput("Unauthorized user");
+  }
   const checkOnly = e.parameter.check;
   const id = e.parameter.id;
   const src = e.parameter.src;
+  console.log("e.parameter.check:", e.parameter.check);
+  console.log("e.parameter.id:", e.parameter.id);
+  console.log("e.parameter.src:", e.parameter.src);
+  const igdbRow = "S";
+  const igdbRange = 'S2:S';
+  const nameRange = 'B2:B';
 
   if (src == 1) { // source: steam
-    const gameDetails = getGameDetails(id, 1);
+    const gameDetails = getGameDetails(id, 1, src);
+    //Logger.log("getGameDetails("+id+", 1, "+src+")= "+gameDetails);
     if (gameDetails) {
-      Logger.log(gameDetails);
       const IGDBID = gameDetails.id;
+      //Logger.log("IGDBID: "+IGDBID);
       if (checkOnly == 1) { // check if game exist
-        if (sheet.getRange('R2:R').createTextFinder(IGDBID).findNext() || sheet.getRange('B2:B').createTextFinder(gameDetails.name).findNext())
+        if (sheet.getRange(igdbRange).createTextFinder(IGDBID).matchEntireCell(true).findNext() || sheet.getRange(nameRange).createTextFinder(gameDetails.name).matchEntireCell(true).findNext())
           return ContentService.createTextOutput("exist");
         else
           return ContentService.createTextOutput("no exist");
@@ -124,7 +149,7 @@ function doPost(e) {
       else if (checkOnly == 0) { // add game
         lastEmptyRow_B = sheet.getLastRow() + 1;
         addGame(IGDBID, lastEmptyRow_B, sheet);
-        if (sheet.getRange("R" + lastEmptyRow_B).getValue() == IGDBID)
+        if (sheet.getRange(igdbRow + lastEmptyRow_B).getValue() == IGDBID)
           return ContentService.createTextOutput("Success");
       } // else if (checkOnly == 0)
     } // if (gameDetails)
@@ -133,7 +158,10 @@ function doPost(e) {
   } // if (src)
   else if (src == 0) { // source: igdb
     if (checkOnly == 1) { // check if game exist
-      if (sheet.getRange('R2:R').createTextFinder(id).findNext() || sheet.getRange('B2:B').createTextFinder(getGameDetails(id, 1).name).findNext())
+    //Logger.log("getGameDetails("+id, ", 1, "+src, ").name:"+getGameDetails(id, 1, src).name);
+    //Logger.log("sheet.getRange('B2:B').createTextFinder(getGameDetails(id, 1, src).name).matchEntireCell(true).findNext()"+sheet.getRange('B2:B').createTextFinder(getGameDetails(id, 1, src).name).matchEntireCell(true).findNext());
+      if (sheet.getRange(igdbRange).createTextFinder(id).matchEntireCell(true).findNext() ||
+          sheet.getRange(nameRange).createTextFinder(getGameDetails(id, 1, src).name).matchEntireCell(true).findNext())
         return ContentService.createTextOutput("exist");
       else
         return ContentService.createTextOutput("no exist");
@@ -141,12 +169,12 @@ function doPost(e) {
     else if (checkOnly == 0) { // add game
       lastEmptyRow_B = sheet.getLastRow() + 1;
       addGame(id, lastEmptyRow_B, sheet);
-      if (sheet.getRange("R" + lastEmptyRow_B).getValue() == id)
+      if (sheet.getRange(igdbRow + lastEmptyRow_B).getValue() == id)
         return ContentService.createTextOutput("Success");
       else
         return ContentService.createTextOutput("G");
     }
   }
   else
-    return ContentService.createTextOutput("Unknown request");
+    return ContentService.createTextOutput("Unknown source");
 }
