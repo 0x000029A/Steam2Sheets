@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Steam2Sheets
 // @namespace    http://tampermonkey.net/
-// @version      24.11.13
+// @version      25.03.11
 // @description  Add Steam games to Google Sheets.
 // @author       mHashem
 // @match        https://store.steampowered.com/app/*
@@ -14,57 +14,65 @@
 (async function() {
     'use strict';
 
-    const steamID = window.location.href.match(/\/app\/(\d+)\//)[1];
+    const steamAppID = window.location.href.match(/\/app\/(\d+)\/?/)?.[1]; // Get the Steam AppID from the URL
+    if (!steamAppID) return; // If no AppID found, exit
 
-    if (steamID) {
-        var addGameBtnDiv = createAddGameBtnDiv();
-        const parentDiv = await observeDOM('#queueActionsCtn');
-        parentDiv.insertBefore(addGameBtnDiv, parentDiv.querySelector('div:nth-child(7)'));
-        if (await googleApps(1)) return;
-        else addGameBtnDiv.addEventListener('mousedown', () => googleApps(0), {once: true});
+    // Get the button container
+    const buttonContainer = await observeDOM('#queueActionsCtn'); // Wait for the button container to load
+    if (!buttonContainer) return; // If no container found, exit
+
+    const addGameButton = createAddGameButton(); // Create the button
+    buttonContainer.insertBefore(addGameButton, buttonContainer.querySelector('div:nth-child(7)')); // Insert the button
+
+    // Handle button click
+    addGameButton.addEventListener('mousedown', handleButtonClick, { once: true });
+
+    async function handleButtonClick() {
+        const exists = await sendToGoogleApps(1);
+        if (!exists) {
+            console.log("Game does not exist, allowing addition.");
+            addGameButton.addEventListener('mousedown', () => sendToGoogleApps(0), { once: true });
+        }
     }
-    ///////////////////////
-    function createAddGameBtnDiv() {
-        const addGameBtnDiv__ = document.createElement('div');
-        addGameBtnDiv__.id = 'addGameBtnDiv';
-        addGameBtnDiv__.innerHTML = `<p><span class="material-symbols-outlined">check_box_outline_blank</span>Add Game</p>`;
+
+    function createAddGameButton() {
+        const button = document.createElement('div');
+        button.id = 'addGameButton';
+        button.innerHTML = `<p><span class="material-symbols-outlined">check_box_outline_blank</span> Add Game</p>`;
 
         GM_addStyle(`
-        @import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0&icon_names=check_box,check_box_outline_blank");
+            @import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0&icon_names=check_box,check_box_outline_blank");
 
-        #addGameBtnDiv {
-            font-size: 15px;
-            padding: 0;
-            margin: 0;
-            display: inline-block;
-            flex-grow: 0;
-            cursor: pointer;
-            user-select: none;
+            #addGameButton {
+                font-size: 15px;
+                display: inline-block;
+                cursor: pointer;
+                user-select: none;
             }
-            #addGameBtnDiv p {
-            padding: 7px;
-            color: #61bff7;
-            background-color: #274157;
-            border-radius: 2px;
+            #addGameButton p {
+                padding: 7px;
+                color: #61bff7;
+                background-color: #274157;
+                border-radius: 2px;
             }
-            #addGameBtnDiv p:hover {
-            background-image: linear-gradient(to right, #66bff2, #427d9e);
-            color:white;
+            #addGameButton p:hover {
+                background-image: linear-gradient(to right, #66bff2, #427d9e);
+                color: white;
             }
             .material-symbols-outlined {
-            float:left;
-            position:relative;
-            bottom:0.3rem;
+                float: left;
+                position: relative;
+                bottom: 0.3rem;
             }
         `);
-
-        return addGameBtnDiv__;
+        return button;
     }
-    async function observeDOM(selector) {
+
+    function observeDOM(selector) {
         return new Promise((resolve) => {
-            const targetNode = document.querySelector(selector);
-            if (targetNode) {
-                resolve(targetNode);
+            const element = document.querySelector(selector);
+            if (element) {
+                resolve(element);
             } else {
                 const observer = new MutationObserver(() => {
                     const target = document.querySelector(selector);
@@ -77,42 +85,50 @@
             }
         });
     }
-    function googleApps(checkOnly) {
-        console.log("Check only sent" + checkOnly);
+
+    function sendToGoogleApps(checkOnly) {
+        console.log("Sending request with checkOnly:", checkOnly);
         return new Promise((resolve, reject) => {
             GM.xmlHttpRequest({
                 method: 'POST',
-                url: 'webapp_url',
+                url: 'URL',
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                data: `check=${checkOnly}&id=${steamID}&src=1`,
-                onload: function(response) {
-                    if (response.responseText === "exist") {
-                        addGameBtnDiv.querySelector("span").innerHTML = "check_box";
-                        addGameBtnDiv.querySelector("p").style.background = "#4882a6";
-                        addGameBtnDiv.style.cursor = "not-allowed";
+                data: `key=KEY&check=${checkOnly}&id=${steamAppID}&src=1`,
+                onload(response) {
+                    const resText = response.responseText.trim();
+                    console.log("Response:", resText);
+
+                    if (resText === "exist") {
+                        updateButtonState(true);
                         resolve(true);
-                    } else if (response.responseText === "Success"){
-                        addGameBtnDiv.querySelector("span").innerHTML = "check_box";
-                        addGameBtnDiv.querySelector("p").style.background = "#4882a6";
-                        addGameBtnDiv.style.cursor = "not-allowed";
-                        addGameBtnDiv.removeEventListener('mousedown', googleApps);
-                    }
-                    else if (response.responseText === "no exist") {
-                        addGameBtnDiv.querySelector("p").style.background = "#58249c";
+                    } else if (resText === "no exist") {
+                        updateButtonState(false);
                         resolve(false);
-                    }
-                    else if (response.responseText === "Steam AppID is not in IGDB") {
-                        addGameBtnDiv.remove();
-                    }
-                    else {
-                        console.log(response.responseText);
+                    } else if (resText === "Steam AppID is not in IGDB") {
+                        addGameButton.remove();
+                        resolve(true);
+                    } else if (resText === "Success") {
+                        updateButtonState(true);
+                        resolve(true);
+                    } else {
+                        resolve(true);
                     }
                 },
-                onerror: function(error) {
-                    console.error('Error adding game, details:', error);
+                onerror(error) {
+                    console.error('Error adding game:', error);
                     reject(error);
                 }
             });
         });
+    }
+
+    function updateButtonState(added) {
+        if (added) {
+            addGameButton.querySelector("span").innerHTML = "check_box";
+            addGameButton.querySelector("p").style.background = "#4882a6";
+            addGameButton.style.cursor = "not-allowed";
+        } else {
+            addGameButton.querySelector("p").style.background = "#58249c";
+        }
     }
 })();
